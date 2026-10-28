@@ -1,0 +1,53 @@
+/* ClassPrep Autopilot — Apple TV look: dark cinematic, glossy cards, clean. */
+* { box-sizing: border-box; }
+body {
+  margin: 0; color: #f5f8ff;
+  font-family: -apple-system, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  background: radial-gradient(1200px 600px at 50% -10%, #26355e 0%, transparent 60%),
+              linear-gradient(180deg, #0d1226 0%, #171233 100%);
+  min-height: 100vh;
+}
+.hero { padding: 56px 24px 8px; text-align: center; }
+.eyebrow { letter-spacing: .18em; text-transform: uppercase; font-size: 12px; color: #9fb2d8; }
+h1 { font-size: 56px; margin: 6px 0 4px; font-weight: 800; }
+.tagline { font-size: 22px; color: #5ec8fa; margin: 4px 0; }
+.status { color: #b2bed6; font-size: 14px; }
+main { max-width: 980px; margin: 0 auto; padding: 16px 20px 64px; display: grid; gap: 22px; }
+.card {
+  background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.04));
+  border: 1px solid rgba(255,255,255,.14); border-radius: 26px;
+  padding: 26px 28px; box-shadow: 0 18px 40px rgba(0,0,0,.35);
+  backdrop-filter: blur(14px);
+}
+.card.glass { background: rgba(20,28,52,.55); }
+h2 { margin: 0 0 16px; font-size: 24px; }
+h3 { margin: 20px 0 10px; font-size: 17px; color: #cfe0ff; }
+label { display: block; font-size: 14px; color: #b2bed6; margin-bottom: 12px; }
+input[type="text"], input:not([type]), input[type="date"], textarea {
+  width: 100%; margin-top: 6px; padding: 12px 14px; border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.16); background: rgba(10,14,26,.65);
+  color: #f5f8ff; font-size: 15px; font-family: inherit;
+}
+.grid { display: grid; grid-template-columns: 1fr 220px; gap: 16px; }
+.rail { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0;
+  padding: 10px 16px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05));
+  border: 1px solid rgba(255,255,255,.18); color: #f5f8ff; font-size: 14px;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.chip:hover { transform: scale(1.04); box-shadow: 0 0 0 2px rgba(94,200,250,.5), 0 10px 24px rgba(0,0,0,.35); }
+.run-btn {
+  margin-top: 22px; width: 100%; padding: 16px; border: 0; border-radius: 18px;
+  font-size: 18px; font-weight: 700; color: #0b1020; cursor: pointer;
+  background: linear-gradient(180deg, #aee3ff, #5ec8fa);
+  box-shadow: 0 12px 30px rgba(94,200,250,.35);
+}
+.run-btn:hover { filter: brightness(1.06); }
+#run-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 15px; }
+#run-log li.ok { color: #6ee7a8; }
+#run-log li.error { color: #ff7878; }
+.dim { color: #8fa0c0; }
+pre { white-space: pre-wrap; word-break: break-word; background: rgba(10,14,26,.65);
+  border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 14px; font-size: 13.5px; }
