@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClassPrep Autopilot</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Meta Global AI Developer Hackathon · Indie track</p>
+    <h1>ClassPrep Autopilot</h1>
+    <p class="tagline">“Give every teacher back their Sunday night.”</p>
+    <p class="status">
+      {% if api_ready %}Model API connected · {{ model }}{% else %}Model API not connected yet — add MODEL_API_KEY to .env{% endif %}
+    </p>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Your session</h2>
+    <form id="session-form">
+      <div class="grid">
+        <label>Course name <input name="course" placeholder="GERMAN 3250 · CitizenTech"></label>
+        <label>Session date <input name="date" type="date"></label>
+      </div>
+      <label>Session topic <input name="topic" placeholder="Dataveillance"></label>
+      <label>Assigned material (summary or paste)
+        <textarea name="assigned" rows="4" placeholder="Sumpter on dataveillance; Eschbach on the NSA; Dangerous Apps reading…"></textarea></label>
+      <label>Learning outcomes
+        <textarea name="outcomes" rows="2" placeholder="Students can explain how dataveillance differs from surveillance…"></textarea></label>
+      <label>Prior-week context / do-not-repeat
+        <textarea name="context" rows="2"></textarea></label>
+
+      <h3>Create for me</h3>
+      <div class="rail">
+        <label class="chip"><input type="checkbox" name="outputs" value="deck" checked> Slide deck</label>
+        <label class="chip"><input type="checkbox" name="outputs" value="reference_card" checked> Reference card</label>
+        <label class="chip"><input type="checkbox" name="outputs" value="prep_podcast" checked> Prep podcast</label>
+        <label class="chip"><input type="checkbox" name="outputs" value="prep_briefing"> Prep briefing</label>
+        <label class="chip"><input type="checkbox" name="outputs" value="discussion_questions"> Discussion questions</label>
+        <label class="chip"><input type="checkbox" name="outputs" value="question_bank"> Question bank → Canvas + Kahoot</label>
+        <label class="chip"><input type="checkbox" name="outputs" value="exit_ticket"> Exit ticket</label>
+      </div>
+
+      <button type="submit" class="run-btn">Run the pipeline</button>
+    </form>
+  </section>
+
+  <section class="card glass">
+    <h2>Run log</h2>
+    <ul id="run-log"><li class="dim">No run yet.</li></ul>
+  </section>
+
+  <section class="card">
+    <h2>Results</h2>
+    <div id="results" class="dim">Your prep bundle stages will appear here.</div>
+  </section>
+</main>
+
+<script>
+const form = document.getElementById('session-form');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(form);
+  const payload = {
+    course: fd.get('course'), date: fd.get('date'), topic: fd.get('topic'),
+    assigned: fd.get('assigned'), outcomes: fd.get('outcomes'),
+    context: fd.get('context'), outputs: fd.getAll('outputs')
+  };
+  const log = document.getElementById('run-log');
+  const results = document.getElementById('results');
+  log.innerHTML = '<li>Running… Planner → Curator</li>';
+  results.textContent = '';
+  try {
+    const r = await fetch('/api/run', {method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)});
+    const data = await r.json();
+    log.innerHTML = data.log.map(s =>
+      `<li class="${s.status}">${s.stage}: ${s.status}${s.detail ? ' — ' + s.detail : ''}</li>`).join('');
+    results.innerHTML =
+      (data.plan ? `<h3>Planner</h3><pre>${data.plan}</pre>` : '') +
+      (data.curator_items ? `<h3>Curator</h3><pre>${data.curator_items}</pre>` : '') +
+      `<p class="dim">${data.note}</p>`;
+  } catch (err) {
+    log.innerHTML = `<li class="error">Run failed: ${err}</li>`;
+  }
+});
+</script>
+</body>
+</html>
