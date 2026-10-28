@@ -17,6 +17,7 @@ try:
 except ImportError:
     pass
 
+import builders
 import meta_api
 
 app = Flask(__name__)
@@ -43,7 +44,7 @@ def run_stage(name, fn, log):
         result = fn()
         log.append({"stage": name, "status": "ok"})
         return result
-    except RuntimeError as e:
+    except Exception as e:  # a stage failure must never 500 the run
         log.append({"stage": name, "status": "error", "detail": str(e)})
         return None
 
@@ -79,13 +80,45 @@ def run():
             f"Session plan:\n{plan}\n\nSession input:\n{session_json}",
             max_output_tokens=4000), log)
 
+    deck = None
+    if plan and items and "deck" in session["outputs"]:
+        deck = run_stage("Deck Builder", lambda: builders.build_deck(
+            session, plan, items), log)
+    card = None
+    if plan and items and "reference_card" in session["outputs"]:
+        card = run_stage("Reference Card Builder",
+                         lambda: builders.build_card(session, plan, items),
+                         log)
+    podcast = None
+    if plan and items and "prep_podcast" in session["outputs"]:
+        podcast = run_stage("Podcast Builder",
+                            lambda: builders.build_podcast(session, plan,
+                                                           items), log)
+    nlm_pack = None
+    if plan and items and "notebooklm_pack" in session["outputs"]:
+        nlm_pack = run_stage("NotebookLM Pack",
+                             lambda: builders.build_notebooklm_pack(
+                                 session, plan, items), log)
+
     return jsonify({
         "log": log,
         "plan": plan,
         "curator_items": items,
-        "note": "Day 1: Planner + Curator live. Builders Thu; "
-                "Verifier, Review gate and Platform Agents Sat.",
+        "deck": deck,
+        "reference_card": card,
+        "prep_podcast": podcast,
+        "notebooklm_pack": nlm_pack,
+        "note": "Planner + Curator + all three Builders (deck, card, "
+                "podcast) + NotebookLM Pack live. Verifier, Review gate "
+                "and Platform Agents Sat.",
     })
+
+
+@app.route("/outputs/<path:filename>")
+def download(filename):
+    from flask import send_from_directory
+    return send_from_directory(builders.OUTPUT_DIR, filename,
+                               as_attachment=True)
 
 
 if __name__ == "__main__":

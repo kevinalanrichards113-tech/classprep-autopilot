@@ -48,8 +48,19 @@ API facts (Meta Model API quickstart):
 - **Wed Oct 28 (Day 1):** repo + MIT LICENSE, app skeleton (Apple TV-style
   UI), Planner + Curator wired to the Meta Model API. API verified live
   (muse-spark-1.3 and muse-wonder-1.0 both answer on this account).
-  Muse Code (Everyday tier) joins the tooling Thu for a logged build task.
-- Thu Oct 29: Builders (deck, card, podcast).
+- **Wed Oct 28 (pulled forward):** Deck Builder live — Muse Spark writes a
+  visual-first deck spec (full narration in speaker notes), python-pptx
+  renders the .pptx; verified on the Dataveillance demo pack (9 slides).
+- **Wed Oct 28 (Muse Code task):** `verifier.py` (URL well-formedness +
+  reachability checks for curator items, `verify_items` report) written by
+  **Muse Code** (Everyday tier, Muse Wonder) in a logged session and
+  pushed by the author; wired into the pipeline Sat with the Verifier
+  stage.
+- **Wed Oct 28 (pulled forward):** Reference Card Builder (one-page,
+  print-ready HTML: key terms, core ideas, comparison, try-it, discussion
+  prompt, sources) and Podcast Builder (~5-min instructor prep script,
+  markdown) live — all three Builders done a day early.
+- Thu Oct 29: NotebookLM Source Pack; push + deploy prep.
 - Sat Oct 31: Verifier, Review gate, Platform Agents, Studio return-import.
 - Mon Nov 2: live run prepping a real class; deploy to a public URL.
 - Tue Nov 3: freeze, demo video, write-up.
