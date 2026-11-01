@@ -11,6 +11,11 @@ Built Oct 28 – Nov 4, 2026 for the Meta Global AI Developer Hackathon
 (solo, Indie Developer track, "Build for Your World"). **All code in this
 repo is new work from the hackathon window.**
 
+**▶ Live demo: https://classprep-autopilot.onrender.com**
+(Free hosting tier — the first load after a quiet stretch can take
+about a minute while the instance wakes. Verified end to end on
+Nov 1, 2026: full demo run, review gate, Canvas + Kahoot exports.)
+
 ## Pipeline
 
 1. **Planner** — reads the session, outcomes, and instructor's chosen outputs
@@ -60,7 +65,16 @@ API facts (Meta Model API quickstart):
   print-ready HTML: key terms, core ideas, comparison, try-it, discussion
   prompt, sources) and Podcast Builder (~5-min instructor prep script,
   markdown) live — all three Builders done a day early.
-- Thu Oct 29: NotebookLM Source Pack; push + deploy prep.
+- **Sun Nov 1 (real run):** full bundle for the real Mon Nov 2 GERMAN
+  3250 session (Week 11 Dataveillance live session + council trial) —
+  8 stages in ~2 minutes, Verifier 43 pass / 2 flag (two FTC links
+  corrected at review), bundle approved by the instructor, Canvas +
+  Kahoot exports generated.
+- Sun Nov 1 (deployed): live on Render at
+  https://classprep-autopilot.onrender.com — verified end to end with
+  the demo pack (Verifier 40 pass / 0 flag; exports 403 before
+  approval, Canvas + Kahoot after).
+- Mon Nov 2: teach with the real bundle.
 - **Thu Oct 29 (Sat work pulled forward — preflight):** Verifier wired
   into the pipeline (`bundle_verifier.py`: Kevin's `verifier.py` URL
   checks + bundle-level and quiz-rule checks, reported per check);
