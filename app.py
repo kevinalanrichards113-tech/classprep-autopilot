@@ -2,9 +2,10 @@
 """ClassPrep Autopilot — Day 1 skeleton.
 
 One page: session input form + outputs checklist, Run button, stage
-run-log panel, results panel. Day 1 wires the Planner and Curator stages
-to the Meta Model API; Builders arrive Thu, Verifier/Review/Platform
-Agents Sat (see README for the build plan).
+run-log panel, results panel. Pipeline: Planner + Curator, Builders,
+Verifier (Kevin's verifier.py wired in, plus bundle-level checks),
+Instructor Review gate (one Approve Bundle unlocks exports), and the
+Canvas + Kahoot Platform Agents behind that gate.
 """
 import json
 import os
@@ -18,7 +19,13 @@ except ImportError:
     pass
 
 import builders
+import bundle_verifier
 import meta_api
+import platform_agents
+import review as review_gate
+import studio_agents
+
+BUNDLES = {}
 
 app = Flask(__name__)
 
@@ -100,6 +107,25 @@ def run():
                              lambda: builders.build_notebooklm_pack(
                                  session, plan, items), log)
 
+    bank = None
+    if plan and items and "question_bank" in session["outputs"]:
+        bank = run_stage("Question Bank Builder",
+                         lambda: builders.build_question_bank(
+                             session, plan, items), log)
+
+    outputs = {"deck": deck, "reference_card": card,
+               "prep_podcast": podcast, "notebooklm_pack": nlm_pack}
+    verifier_report = None
+    bundle = None
+    if plan and items:
+        verifier_report = run_stage(
+            "Verifier", lambda: bundle_verifier.verify_bundle(
+                builders._items_list(items), outputs, bank), log)
+        bundle = review_gate.new_bundle(
+            session, plan=plan, curator_items=items, outputs=outputs,
+            verifier_report=verifier_report, question_bank=bank)
+        BUNDLES[bundle["bundle_id"]] = bundle
+
     return jsonify({
         "log": log,
         "plan": plan,
@@ -108,10 +134,177 @@ def run():
         "reference_card": card,
         "prep_podcast": podcast,
         "notebooklm_pack": nlm_pack,
-        "note": "Planner + Curator + all three Builders (deck, card, "
-                "podcast) + NotebookLM Pack live. Verifier, Review gate "
-                "and Platform Agents Sat.",
+        "question_bank": bank,
+        "verifier": verifier_report,
+        "bundle_id": bundle["bundle_id"] if bundle else None,
+        "review": {"status": bundle["status"],
+                   "exports_locked": bundle["exports_locked"],
+                   "watermark": bundle["watermark"]} if bundle else None,
+        "note": "Full pipeline live: Planner + Curator + Builders + "
+                "Question Bank, then the Verifier. Exports stay locked "
+                "until you review the bundle and choose Approve Bundle.",
     })
+
+
+@app.route("/api/bundles/<bundle_id>")
+def get_bundle(bundle_id):
+    bundle = BUNDLES.get(bundle_id)
+    if not bundle:
+        return jsonify({"error": "bundle not found"}), 404
+    return jsonify({
+        "bundle_id": bundle["bundle_id"], "status": bundle["status"],
+        "approved": bundle["approved"],
+        "exports_locked": bundle["exports_locked"],
+        "watermark": bundle["watermark"],
+        "verifier": bundle["verifier_report"],
+        "question_bank": bundle["question_bank"],
+        "outputs": bundle["outputs"],
+        "studio_imports": bundle.get("studio_imports", []),
+        "flow_pack": ({"choices": bundle["flow_pack"]["choices"],
+                       "mode": bundle["flow_pack"]["mode"],
+                       "pilot_slide":
+                           bundle["flow_pack"]["pilot_slide"],
+                       "pilot_approved":
+                           bundle.get("flow_pilot_approved", False),
+                       "files": bundle["flow_pack"]["files"]}
+                      if bundle.get("flow_pack") else None),
+    })
+
+
+@app.route("/api/bundles/<bundle_id>/approve", methods=["POST"])
+def approve(bundle_id):
+    bundle = BUNDLES.get(bundle_id)
+    if not bundle:
+        return jsonify({"error": "bundle not found"}), 404
+    review_gate.approve_bundle(bundle)
+    return jsonify({"bundle_id": bundle_id, "status": bundle["status"],
+                    "approved": True, "exports_locked": False,
+                    "note": "Bundle approved. Canvas and Kahoot exports "
+                            "are now unlocked."})
+
+
+@app.route("/api/bundles/<bundle_id>/studio-import", methods=["POST"])
+def studio_import(bundle_id):
+    """Studio return-import: a downloaded Studio artifact (NotebookLM
+    deck PDF, audio overview, quiz export, Flow clip...) is dropped
+    back into the bundle's Review tray. Labeled 'Studio handoff',
+    checked by the Verifier, and behind the same Approve Bundle gate
+    as native outputs — importing never unlocks anything."""
+    bundle = BUNDLES.get(bundle_id)
+    if not bundle:
+        return jsonify({"error": "bundle not found"}), 404
+    upload = request.files.get("file")
+    if upload is None or not upload.filename:
+        return jsonify({"error": "no file uploaded (form field "
+                                 "'file')"}), 400
+    kind = request.form.get("kind", "other")
+    item = studio_agents.import_artifact(
+        bundle, upload.filename, upload.read(), kind)
+    return jsonify({
+        "import": item,
+        "download": f"/outputs/{item['file']}",
+        "review": {"status": bundle["status"],
+                   "exports_locked": bundle["exports_locked"]},
+        "note": "Studio handoff — imported into the Review tray and "
+                "checked by the Verifier. It ships only with the "
+                "bundle, after Approve Bundle, like any native output.",
+    })
+
+
+@app.route("/api/bundles/<bundle_id>/flow-pack", methods=["POST"])
+def flow_pack(bundle_id):
+    """Flow Agent, pilot first: storyboard + assets + assembly
+    checklist for the whole deck, animation cards for ONE pilot
+    slide. Batching waits for pilot approval (see flow_pack_batch)."""
+    bundle = BUNDLES.get(bundle_id)
+    if not bundle:
+        return jsonify({"error": "bundle not found"}), 404
+    choices = request.get_json(silent=True) or {}
+    try:
+        pack = studio_agents.build_flow_pack(bundle, choices,
+                                             full=False)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    bundle["flow_pack"] = pack
+    bundle["flow_pilot_approved"] = False
+    return jsonify({"flow_pack": pack,
+                    "downloads": {k: f"/outputs/{v}" for k, v in
+                                  pack["files"].items()},
+                    "note": "Pilot first: cards for one pilot slide "
+                            "only. Approve the pilot to batch the "
+                            "rest of the deck."})
+
+
+@app.route("/api/bundles/<bundle_id>/flow-pack/approve-pilot",
+           methods=["POST"])
+def flow_pack_approve_pilot(bundle_id):
+    bundle = BUNDLES.get(bundle_id)
+    if not bundle:
+        return jsonify({"error": "bundle not found"}), 404
+    if not bundle.get("flow_pack"):
+        return jsonify({"error": "no Flow pilot pack yet; generate "
+                                 "one first"}), 400
+    bundle["flow_pilot_approved"] = True
+    return jsonify({"bundle_id": bundle_id, "pilot_approved": True,
+                    "pilot_slide": bundle["flow_pack"]["pilot_slide"],
+                    "note": "Pilot approved. The Flow Agent can now "
+                            "batch cards for the rest of the deck."})
+
+
+@app.route("/api/bundles/<bundle_id>/flow-pack/batch", methods=["POST"])
+def flow_pack_batch(bundle_id):
+    """Batch the Flow animation cards for every slide in scope. 403
+    until the instructor approves the pilot slide's cards."""
+    bundle = BUNDLES.get(bundle_id)
+    if not bundle:
+        return jsonify({"error": "bundle not found"}), 404
+    if not bundle.get("flow_pack"):
+        return jsonify({"error": "no Flow pilot pack yet; generate "
+                                 "one first"}), 400
+    if not bundle.get("flow_pilot_approved"):
+        return jsonify({
+            "error": "Pilot first: approve the pilot slide's cards "
+                     "before batching the rest of the deck.",
+            "pilot_approved": False}), 403
+    choices = dict(bundle["flow_pack"]["choices"])
+    choices.update({k: v for k, v in
+                    (request.get_json(silent=True) or {}).items()
+                    if v is not None})
+    try:
+        pack = studio_agents.build_flow_pack(bundle, choices,
+                                             full=True)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    bundle["flow_pack"] = pack
+    return jsonify({"flow_pack": pack,
+                    "downloads": {k: f"/outputs/{v}" for k, v in
+                                  pack["files"].items()},
+                    "note": "Full batch generated for every slide "
+                            "in scope."})
+
+
+@app.route("/api/bundles/<bundle_id>/export/<platform>", methods=["POST", "GET"])
+def export(bundle_id, platform):
+    bundle = BUNDLES.get(bundle_id)
+    if not bundle:
+        return jsonify({"error": "bundle not found"}), 404
+    try:
+        review_gate.assert_exports_unlocked(bundle)
+    except review_gate.ExportLockedError as e:
+        return jsonify({"error": str(e), "exports_locked": True}), 403
+    if not bundle.get("question_bank"):
+        return jsonify({"error": "this bundle has no question bank; "
+                                 "re-run with Question bank selected"}), 400
+    if platform == "canvas":
+        report = platform_agents.export_canvas(
+            bundle["question_bank"], bundle["session"])
+    elif platform == "kahoot":
+        report = platform_agents.export_kahoot(
+            bundle["question_bank"], bundle["session"])
+    else:
+        return jsonify({"error": f"unknown platform: {platform}"}), 404
+    return jsonify({"export": report,
+                    "download": f"/outputs/{report['file']}"})
 
 
 @app.route("/outputs/<path:filename>")

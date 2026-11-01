@@ -61,7 +61,42 @@ API facts (Meta Model API quickstart):
   prompt, sources) and Podcast Builder (~5-min instructor prep script,
   markdown) live — all three Builders done a day early.
 - Thu Oct 29: NotebookLM Source Pack; push + deploy prep.
-- Sat Oct 31: Verifier, Review gate, Platform Agents, Studio return-import.
+- **Thu Oct 29 (Sat work pulled forward — preflight):** Verifier wired
+  into the pipeline (`bundle_verifier.py`: Kevin's `verifier.py` URL
+  checks + bundle-level and quiz-rule checks, reported per check);
+  Review gate live (`review.py`: DRAFT bundle, exports locked, one
+  Approve Bundle unlocks them — tested blocked-before / open-after
+  through the app); Platform Agents live (`platform_agents.py`: Canvas
+  QTI zip with native types + instructor copy on Kevin's preset, Kahoot
+  import .xlsx with an honest conversion report); minimal Question Bank
+  Builder added so exports have a real bank to test (model bank first,
+  validated; a reported deterministic fallback). Full live run on the
+  Dataveillance demo pack: all stages passed, Verifier 42 pass / 2 flag
+  (both source-URL flags — see `PREFLIGHT-AUDIT-2026-10-29.md`).
+- **Sat Oct 31:** Studio return-import + Flow Agent prompt packs live
+  (`studio_agents.py`). Return-import: a downloaded Studio artifact
+  (NotebookLM deck PDF, audio overview, quiz export, Flow clip) drops
+  back into the bundle's Review tray labeled **"Studio handoff"** —
+  the Verifier checks it (file saved, format matches the declared
+  kind, text extraction, and a grounding check against the session's
+  own sources) and it sits behind the same Approve Bundle gate as
+  native outputs; importing unlocks nothing. Flow Agent: storyboard
+  (animated vs. cutaway vs. static, one-line brief per shot),
+  assets/ingredients list with a shared style anchor, animation cards
+  in Kevin's pattern (slide as start AND end frame, "Animate this
+  image," ~8s seamless loop; 10–15s cutaway prompts from the
+  narration), and an assembly checklist that returns finished clips
+  through the Studio handoff import. Pilot-first: cards generate for
+  ONE pilot slide (demo deck: slide 2, "The Smart City Is Now
+  Watching You") and batching returns 403 until the pilot is
+  approved; instructor choices exposed (dividers only / key slides /
+  all slides, loop length, aspect, cutaways on/off). Verified by
+  `tests/test_studio_flow.py` (36 checks, all passing): import from
+  the demo pack's NotebookLM Source Pack (deck source, Verifier 4/4
+  pass, 33% grounding overlap), exports 403 before approval and
+  still 403 after import, 200 after Approve Bundle, pilot/batch
+  gating as designed. Push to GitHub remains a separate browser step
+  (the connected integration cannot write to this repo).
 - Mon Nov 2: live run prepping a real class; deploy to a public URL.
 - Tue Nov 3: freeze, demo video, write-up.
 - Wed Nov 4: submit (deadline 9:00 PM ET).

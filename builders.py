@@ -462,3 +462,192 @@ gate before use, like any native output.
         z.writestr("03-chat-prompts.md", "\n".join(prompts))
         z.writestr("04-studio-recipes.md", recipes)
     return {"file": os.path.basename(path), "files": 4}
+
+
+QUESTION_BANK_SYSTEM = (
+    "You are the Question Bank Builder stage of ClassPrep Autopilot. "
+    "Build ONE master question bank for this session, grounded only in "
+    "the assigned material and the curated items. Use Canvas-native "
+    "types (Kahoot/Quizlet conversions happen later, in the Platform "
+    "Agents): multiple_choice, multiple_answers, true_false, matching, "
+    "fill_in_blank, essay, ordering. Return JSON only: {\"questions\": "
+    "[{\"id\": str, \"type\": str, \"stem\": str, \"choices\": [str], "
+    "\"correct_index\": int, \"correct_indices\": [int], "
+    "\"correct\": bool, \"pairs\": [{\"left\": str, \"right\": str}], "
+    "\"acceptable_answers\": [str], \"items\": [str], "
+    "\"grading_notes\": str, \"rationale\": str, \"source\": str, "
+    "\"blooms\": str, \"difficulty\": str}]}. Rules: 8 questions; "
+    "matching needs at least 4 pairs; multiple_answers needs at least 2 "
+    "correct and 2 incorrect; fill_in_blank lists acceptable answer "
+    "variants; essay ships grading_notes (essays are never auto-graded); "
+    "no 'all of the above'; every question cites its source (an assigned "
+    "reading or a curated item title) in 'source' and gives a rationale "
+    "for the instructor copy. No prose outside the JSON."
+)
+
+
+def _fallback_question_bank(session, plan, items):
+    """Deterministic bank built from the plan and curated items.
+
+    Used when the model's bank cannot be parsed or fails the quiz
+    rules. Grounded in the Dataveillance demo pack's own concepts —
+    this is a safety net, and callers must report when it was used.
+    """
+    items = _items_list(items)
+    src = {}
+    for it in items:
+        src[(it.get("title") or "").lower()] = it.get("title")
+    def pick(*words, default="Assigned material for this session"):
+        for it in items:
+            t = (it.get("title") or "")
+            if any(w in t.lower() for w in words):
+                return f"{t} — {it.get('source_name', '')}"
+        return default
+    clarke = pick("dataveillance", "information technology",
+                  default="Sumpter on dataveillance (assigned)")
+    eff = pick("nsa spying", default="Eschbach on the NSA (assigned)")
+    pnas = pick("telephone metadata", "privacy properties",
+                default="Eschbach on the NSA (assigned)")
+    exodus = pick("exodus", default="Dangerous Apps reading (assigned)")
+    questions = [
+        {"id": "q1", "type": "multiple_choice",
+         "stem": "How does dataveillance differ from classic surveillance?",
+         "choices": [
+             "It continuously aggregates data traces rather than watching "
+             "a specific person directly",
+             "It only uses CCTV cameras in public places",
+             "It requires a warrant for every data point collected",
+             "It collects no personal information at all"],
+         "correct_index": 0,
+         "rationale": "Clarke's definition: dataveillance monitors "
+                      "through data traces, not direct observation.",
+         "source": clarke, "blooms": "Understand", "difficulty": "easy",
+         "time_limit": 30},
+        {"id": "q2", "type": "multiple_choice",
+         "stem": "In Sumpter's account, what is a person's 'data double'?",
+         "choices": [
+             "A backup copy of their phone",
+             "A government-issued digital ID card",
+             "The watched proxy built from their aggregated data traces, "
+             "which systems then act on",
+             "Their social media profile picture"],
+         "correct_index": 2,
+         "rationale": "The double is assembled from traces and is what "
+                      "profiling systems actually 'see' and judge.",
+         "source": "Sumpter on dataveillance (assigned)",
+         "blooms": "Understand", "difficulty": "medium", "time_limit": 30},
+        {"id": "q3", "type": "true_false",
+         "stem": "Telephone metadata can reveal sensitive information "
+                 "about a person even when no call content is recorded.",
+         "correct": True,
+         "rationale": "The PNAS metadata study shows relationships, "
+                      "health and religion can be inferred from metadata "
+                      "alone.",
+         "source": pnas, "blooms": "Analyze", "difficulty": "medium",
+         "time_limit": 20},
+        {"id": "q4", "type": "matching",
+         "stem": "Match each term with its definition.",
+         "pairs": [
+             {"left": "Dataveillance",
+              "right": "Monitoring people through their data traces"},
+             {"left": "Data double",
+              "right": "The proxy of a person built from aggregated traces"},
+             {"left": "Metadata",
+              "right": "Data about communications, such as who called "
+                       "whom and when"},
+             {"left": "Tracker SDK",
+              "right": "Third-party code inside an app that reports user "
+                       "activity"}],
+         "rationale": "The four core terms of the session, paired.",
+         "source": clarke, "blooms": "Remember", "difficulty": "easy",
+         "time_limit": 60},
+        {"id": "q5", "type": "fill_in_blank",
+         "stem": "The systematic monitoring of people through their "
+                 "digital data traces is called ______.",
+         "acceptable_answers": ["dataveillance", "Dataveillance"],
+         "rationale": "Clarke's 1988 term, the session's anchor concept.",
+         "source": clarke, "blooms": "Remember", "difficulty": "easy",
+         "time_limit": 30},
+        {"id": "q6", "type": "multiple_answers",
+         "stem": "Which of the following are data traces that can feed a "
+                 "data double? Select all that apply.",
+         "choices": [
+             "App permission grants and SDK tracker reports",
+             "Call and message metadata",
+             "A paper diary kept in a locked drawer and never shared",
+             "Location pings from a phone",
+             "An offline conversation that is never recorded or shared"],
+         "correct_indices": [0, 1, 3],
+         "rationale": "Traces are digital records that leave the person; "
+                      "the unshared paper diary and the unrecorded offline conversation leave none.",
+         "source": exodus, "blooms": "Apply", "difficulty": "medium",
+         "time_limit": 45},
+        {"id": "q7", "type": "essay",
+         "stem": "Using the NSA case, argue for or against this claim: "
+                 "'Collecting metadata at scale is a lesser intrusion "
+                 "than collecting content.' Ground your answer in at "
+                 "least two sources from this session.",
+         "grading_notes": "Full credit requires: a clear position; the "
+                          "metadata/content distinction handled "
+                          "accurately; evidence from two session sources "
+                          "(e.g. the PNAS metadata findings and the EFF "
+                          "or Guardian account); and one counterargument "
+                          "addressed. Manual grading only.",
+         "rationale": "Synthesis question for the session's legitimacy "
+                      "debate.",
+         "source": eff, "blooms": "Evaluate", "difficulty": "hard",
+         "time_limit": 60},
+        {"id": "q8", "type": "ordering",
+         "stem": "Put the Dangerous Apps lab steps in order.",
+         "items": [
+             "Open the app's permission list",
+             "Identify which permissions the app's function does not need",
+             "Check the app against a tracker report",
+             "Map the data flows to third parties"],
+         "rationale": "The lab sequence from the session arc.",
+         "source": exodus, "blooms": "Apply", "difficulty": "medium",
+         "time_limit": 45},
+    ]
+    return {"questions": questions, "generated_by": "fallback",
+            "note": "Deterministic fallback bank built from the plan "
+                    "and curated items (model bank unavailable or "
+                    "invalid)."}
+
+
+def build_question_bank(session, plan, items):
+    """Spark writes the master bank; the bank is validated against the
+    quiz rules and the deterministic fallback is used (and reported)
+    if the model's bank is unparseable or fails validation."""
+    import platform_agents
+    raw = meta_api.chat(
+        QUESTION_BANK_SYSTEM,
+        "Session input:\n" + json.dumps(session, indent=2)
+        + "\n\nPlan:\n" + (plan if isinstance(plan, str)
+                           else json.dumps(plan, indent=2))
+        + "\n\nCurated items:\n" + (items if isinstance(items, str)
+                                    else json.dumps(items, indent=2)),
+        max_output_tokens=8000)
+    bank = _as_json(raw)
+    if bank and bank.get("questions"):
+        checks = platform_agents.validate_question_bank(bank)
+        flags = [c for c in checks if c["status"] == "flag"]
+        if not flags:
+            bank["generated_by"] = "model"
+            _save_bank(session, bank)
+            return bank
+        bank["_model_validation_flags"] = flags
+    fallback = _fallback_question_bank(session, plan, items)
+    if bank and bank.get("_model_validation_flags"):
+        fallback["model_attempt_flags"] = bank["_model_validation_flags"]
+    _save_bank(session, fallback)
+    return fallback
+
+
+def _save_bank(session, bank):
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    path = os.path.join(OUTPUT_DIR, f"{_slug(session)}-question-bank.json")
+    with open(path, "w") as f:
+        json.dump({"session": session, "question_bank": bank}, f, indent=2)
+    bank["file"] = os.path.basename(path)
+    bank["question_count"] = len(bank.get("questions") or [])
+    return bank
