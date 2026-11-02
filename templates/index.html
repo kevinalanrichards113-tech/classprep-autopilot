@@ -62,6 +62,7 @@
 </main>
 
 <script>
+const escH = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const form = document.getElementById('session-form');
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -81,7 +82,7 @@ form.addEventListener('submit', async (e) => {
       body: JSON.stringify(payload)});
     const data = await r.json();
     log.innerHTML = data.log.map(s =>
-      `<li class="${s.status}">${s.stage}: ${s.status}${s.detail ? ' — ' + s.detail : ''}</li>`).join('');
+      `<li class="${s.status}">${escH(s.stage)}: ${s.status}${s.detail ? ' — ' + escH(s.detail) : ''}</li>`).join('');
     window._bundleId = data.bundle_id;
     // The packet itself. The review gate only means something if the
     // teacher can SEE what they are approving, so render every built
@@ -130,7 +131,7 @@ form.addEventListener('submit', async (e) => {
     const v = data.verifier;
     const vHtml = v ? `<h3>Verifier — ${v.summary.pass} pass, ${v.summary.flag} flag</h3>` +
       '<ul>' + v.checks.map(c =>
-        `<li class="${c.status === 'pass' ? 'ok' : 'error'}">${c.status.toUpperCase()} — ${c.name}${c.item ? ' · ' + c.item : ''}: ${c.detail}</li>`).join('') + '</ul>' : '';
+        `<li class="${c.status === 'pass' ? 'ok' : 'error'}">${c.status.toUpperCase()} — ${escH(c.name)}${c.item ? ' · ' + escH(c.item) : ''}: ${escH(c.detail)}</li>`).join('') + '</ul>' : '';
     const reviewHtml = data.bundle_id ? `<h3>Review — DRAFT, exports locked</h3>
       <p>Review the bundle above once. One approval unlocks the Canvas and Kahoot exports.</p>
       <button type="button" id="approve-btn" class="run-btn">Approve Bundle</button>
@@ -185,10 +186,10 @@ form.addEventListener('submit', async (e) => {
       <p id="flow-msg" class="dim"></p>
       <div id="flow-zone"></div>` : '';
     results.innerHTML =
-      (data.plan ? `<h3>Planner</h3><pre>${data.plan}</pre>` : '') +
-      (data.curator_items ? `<h3>Curator</h3><pre>${data.curator_items}</pre>` : '') +
+      (data.plan ? `<h3>Planner</h3><pre>${escH(data.plan)}</pre>` : '') +
+      (data.curator_items ? `<h3>Curator</h3><pre>${escH(data.curator_items)}</pre>` : '') +
       packetHtml + vHtml + reviewHtml +
-      (data.bundle_id ? `<p class="dim">${data.note}</p>` :
+      (data.bundle_id ? `<p class="dim">${escH(data.note)}</p>` :
         `<p class="error"><b>No bundle was created.</b> A pipeline stage failed — see the Run log above — so there is no packet to review or approve yet. Fix the failing stage and run again.</p>`);
     const approveBtn = document.getElementById('approve-btn');
     if (approveBtn) {
