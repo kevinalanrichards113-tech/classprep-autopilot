@@ -73,7 +73,7 @@ form.addEventListener('submit', async (e) => {
   };
   const log = document.getElementById('run-log');
   const results = document.getElementById('results');
-  log.innerHTML = '<li>Running… Planner → Curator</li>';
+  log.innerHTML = '<li>Running… Planner → Curator → Builders → Verifier</li>';
   results.textContent = '';
   try {
     const r = await fetch('/api/run', {method: 'POST',
@@ -82,10 +82,208 @@ form.addEventListener('submit', async (e) => {
     const data = await r.json();
     log.innerHTML = data.log.map(s =>
       `<li class="${s.status}">${s.stage}: ${s.status}${s.detail ? ' — ' + s.detail : ''}</li>`).join('');
+    window._bundleId = data.bundle_id;
+    // The packet itself. The review gate only means something if the
+    // teacher can SEE what they are approving, so render every built
+    // artifact (with a link to the actual file) and the full question
+    // bank here, in the same view as the Approve button below.
+    const escP = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const artifact = (label, info, facts) => info && info.file ?
+      `<li><b>${label}</b> — ${facts} · <a href="/outputs/${encodeURIComponent(info.file)}">Download ${escP(info.file)}</a></li>` : '';
+    const packetItems =
+      artifact('Slide deck', data.deck, `${data.deck?.slides ?? '?'} slides`) +
+      artifact('Reference card', data.reference_card, `${data.reference_card?.key_terms ?? '?'} key terms`) +
+      artifact('Prep podcast script', data.prep_podcast, `${data.prep_podcast?.words ?? '?'} words (~${data.prep_podcast?.est_minutes ?? '?'} min at speaking pace)`) +
+      artifact('NotebookLM pack', data.notebooklm_pack, `${data.notebooklm_pack?.files ?? '?'} files, zipped`);
+    const qHtml = (q, i) => {
+      const parts = [`<p><b>Q${i + 1} · ${escP((q.type || 'question').replace(/_/g, ' '))}</b> — ${escP(q.stem || '')}</p>`];
+      if (Array.isArray(q.choices)) {
+        const right = new Set(q.correct_indices || (q.correct_index != null ? [q.correct_index] : []));
+        parts.push('<ul>' + q.choices.map((c, ci) =>
+          `<li>${right.has(ci) ? '✓ ' : ''}${escP(c)}</li>`).join('') + '</ul>');
+      }
+      if (q.type === 'true_false' && typeof q.correct === 'boolean')
+        parts.push(`<p>Correct answer: <b>${q.correct ? 'True' : 'False'}</b></p>`);
+      if (Array.isArray(q.pairs))
+        parts.push('<ul>' + q.pairs.map(pr =>
+          `<li>${escP(pr.left ?? '')} → ${escP(pr.right ?? '')}</li>`).join('') + '</ul>');
+      if (Array.isArray(q.items))
+        parts.push('<p>Correct order:</p><ol>' + q.items.map(x =>
+          `<li>${escP(x)}</li>`).join('') + '</ol>');
+      if (Array.isArray(q.acceptable_answers) && q.acceptable_answers.length)
+        parts.push(`<p>Acceptable answers: <b>${q.acceptable_answers.map(escP).join('</b>, <b>')}</b></p>`);
+      if (q.answer) parts.push(`<p>Answer: <b>${escP(q.answer)}</b></p>`);
+      if (q.grading_notes) parts.push(`<p class="dim">Grading notes: ${escP(q.grading_notes)}</p>`);
+      if (q.rationale) parts.push(`<p class="dim">Why this question: ${escP(q.rationale)}</p>`);
+      if (q.source) parts.push(`<p class="dim">Source: ${escP(q.source)}</p>`);
+      parts.push(`<details><summary class="dim">Raw question data</summary><pre>${escP(JSON.stringify(q, null, 2))}</pre></details>`);
+      return `<div class="tray-item">${parts.join('')}</div>`;
+    };
+    const bankQ = (data.question_bank && data.question_bank.questions) || [];
+    const bankHtml = bankQ.length ?
+      `<h4>Question bank — ${bankQ.length} questions (this is what the Canvas and Kahoot exports are built from)</h4>` +
+      bankQ.map(qHtml).join('') : '';
+    const packetHtml = data.bundle_id ? `<h3>The packet — review before you approve</h3>
+      <p><span class="badge">${escP((data.review && data.review.watermark) || 'DRAFT — awaiting instructor review')}</span></p>
+      ${packetItems ? `<ul>${packetItems}</ul>` : (bankHtml ? '' : '<p class="dim">No built artifacts in this bundle — the plan and curator items above are the packet.</p>')}
+      ${bankHtml}` : '';
+    const v = data.verifier;
+    const vHtml = v ? `<h3>Verifier — ${v.summary.pass} pass, ${v.summary.flag} flag</h3>` +
+      '<ul>' + v.checks.map(c =>
+        `<li class="${c.status === 'pass' ? 'ok' : 'error'}">${c.status.toUpperCase()} — ${c.name}${c.item ? ' · ' + c.item : ''}: ${c.detail}</li>`).join('') + '</ul>' : '';
+    const reviewHtml = data.bundle_id ? `<h3>Review — DRAFT, exports locked</h3>
+      <p>Review the bundle above once. One approval unlocks the Canvas and Kahoot exports.</p>
+      <button type="button" id="approve-btn" class="run-btn">Approve Bundle</button>
+      <div id="export-zone" style="margin-top:16px">
+        <button type="button" id="canvas-btn" class="run-btn" disabled>Export to Canvas (locked)</button>
+        <button type="button" id="kahoot-btn" class="run-btn" disabled style="margin-top:10px">Export to Kahoot (locked)</button>
+        <p id="export-msg" class="dim"></p>
+      </div>
+      <h3>Studio handoff — return import <span class="badge">Studio handoff</span></h3>
+      <p>Run a studio step yourself (NotebookLM, Google Flow), download the result, and drop it back here. It lands in this Review tray like a native output — the Verifier checks it against the session sources, and it ships only with the bundle after Approve Bundle. Guided handoff, never fake automation.</p>
+      <div class="grid">
+        <label>Artifact file <input type="file" id="studio-file"></label>
+        <label>What is it?
+          <select id="studio-kind">
+            <option value="notebooklm_deck">NotebookLM slide deck</option>
+            <option value="audio_overview">NotebookLM audio overview</option>
+            <option value="quiz_export">Studio quiz export</option>
+            <option value="flashcards">Studio flashcards</option>
+            <option value="mind_map">NotebookLM mind map</option>
+            <option value="report">Studio report / briefing doc</option>
+            <option value="flow_clip">Google Flow clip</option>
+            <option value="other">Other studio artifact</option>
+          </select></label>
+      </div>
+      <button type="button" id="studio-import-btn" class="run-btn">Import into the Review tray</button>
+      <p id="studio-msg" class="dim"></p>
+      <div id="studio-tray" class="tray"></div>
+      <h3>Flow Agent — animation prompt pack <span class="badge">Studio handoff</span></h3>
+      <p>Storyboard, ingredients and animation cards for this bundle's deck, in your pattern: slide as start <em>and</em> end frame, “Animate this image,” a seamless loop. Pilot first — one slide's cards for your approval before anything batches.</p>
+      <div class="rail">
+        <label class="chip">Animate
+          <select id="flow-scope">
+            <option value="key_slides">Key slides</option>
+            <option value="dividers_only">Dividers only</option>
+            <option value="all_slides">All slides</option>
+          </select></label>
+        <label class="chip">Loop length
+          <select id="flow-clip">
+            <option value="6">~6 sec</option>
+            <option value="8" selected>~8 sec</option>
+            <option value="10">~10 sec</option>
+          </select></label>
+        <label class="chip">Aspect
+          <select id="flow-aspect">
+            <option value="16:9" selected>16:9</option>
+            <option value="4:3">4:3</option>
+            <option value="9:16">9:16</option>
+          </select></label>
+        <label class="chip"><input type="checkbox" id="flow-cutaways" checked> Cutaway scenes</label>
+      </div>
+      <button type="button" id="flow-btn" class="run-btn">Generate pilot pack</button>
+      <p id="flow-msg" class="dim"></p>
+      <div id="flow-zone"></div>` : '';
     results.innerHTML =
       (data.plan ? `<h3>Planner</h3><pre>${data.plan}</pre>` : '') +
       (data.curator_items ? `<h3>Curator</h3><pre>${data.curator_items}</pre>` : '') +
-      `<p class="dim">${data.note}</p>`;
+      packetHtml + vHtml + reviewHtml +
+      (data.bundle_id ? `<p class="dim">${data.note}</p>` :
+        `<p class="error"><b>No bundle was created.</b> A pipeline stage failed — see the Run log above — so there is no packet to review or approve yet. Fix the failing stage and run again.</p>`);
+    const approveBtn = document.getElementById('approve-btn');
+    if (approveBtn) {
+      approveBtn.addEventListener('click', async () => {
+        const r = await fetch(`/api/bundles/${window._bundleId}/approve`, {method: 'POST'});
+        const d = await r.json();
+        if (d.approved) {
+          approveBtn.textContent = 'Bundle approved — exports unlocked';
+          approveBtn.disabled = true;
+          for (const [id, label] of [['canvas-btn','Export to Canvas'],['kahoot-btn','Export to Kahoot']]) {
+            const b = document.getElementById(id); b.disabled = false; b.textContent = label;
+          }
+        }
+      });
+      for (const [id, platform] of [['canvas-btn','canvas'],['kahoot-btn','kahoot']]) {
+        document.getElementById(id).addEventListener('click', async () => {
+          const r = await fetch(`/api/bundles/${window._bundleId}/export/${platform}`, {method: 'POST'});
+          const d = await r.json();
+          const msg = document.getElementById('export-msg');
+          if (!r.ok) { msg.textContent = d.error; return; }
+          msg.innerHTML = `${platform} export ready: <a href="${d.download}">${d.export.file}</a> — ${d.export.question_count} questions; converted: ${(d.export.converted||[]).join(', ') || 'none'}; instructor-only: ${(d.export.instructor_only||[]).join(', ') || 'none'}`;
+        });
+      }
+      const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      const renderTrayItem = (item, download) => {
+        const v = item.verifier;
+        const checks = v ? '<ul>' + v.checks.map(c =>
+          `<li class="${c.status === 'pass' ? 'ok' : 'error'}">${c.status.toUpperCase()} — ${esc(c.name)}: ${esc(c.detail)}</li>`).join('') + '</ul>' : '';
+        return `<div class="tray-item">
+          <p><span class="badge">Studio handoff</span> <b>${esc(item.filename)}</b> · ${esc(item.kind_label)} · ${item.bytes} bytes · <span class="dim">status: ${esc(item.status.replace('_', ' '))} — behind the Approve Bundle gate</span></p>
+          ${v ? `<p>Verifier — ${v.summary.pass} pass, ${v.summary.flag} flag</p>${checks}` : ''}
+          <p><a href="${download}">Download the imported file</a></p>
+        </div>`;
+      };
+      const importBtn = document.getElementById('studio-import-btn');
+      if (importBtn) {
+        importBtn.addEventListener('click', async () => {
+          const fileInput = document.getElementById('studio-file');
+          const msg = document.getElementById('studio-msg');
+          if (!fileInput.files.length) { msg.textContent = 'Choose a downloaded Studio artifact first.'; return; }
+          const fd = new FormData();
+          fd.append('file', fileInput.files[0]);
+          fd.append('kind', document.getElementById('studio-kind').value);
+          const r = await fetch(`/api/bundles/${window._bundleId}/studio-import`, {method: 'POST', body: fd});
+          const d = await r.json();
+          if (!r.ok) { msg.textContent = d.error; return; }
+          msg.textContent = d.note;
+          document.getElementById('studio-tray').innerHTML += renderTrayItem(d.import, d.download);
+        });
+      }
+      const cardText = (c) => {
+        let t = `Slide ${c.slide}: ${c.title}\nStart frame: ${c.start_frame}\nEnd frame: ${c.end_frame}\nFlow prompt: "${c.prompt}"\nDuration: ~${c.duration_seconds} seconds, seamless loop · Aspect: ${c.aspect}`;
+        if (c.cutaway) t += `\nCutaway (${c.cutaway.duration_seconds}s): "${c.cutaway.prompt}"\nPlacement: ${c.cutaway.placement}`;
+        return t;
+      };
+      const renderFlow = (pack, downloads, batched) => {
+        const board = '<h4>Storyboard</h4><ul>' + pack.storyboard.map(e =>
+          `<li>Slide ${e.slide} — ${esc(e.title)} [${esc(e.treatment)}]: ${esc(e.brief)}${e.cutaway_brief ? '<br><span class="dim">' + esc(e.cutaway_brief) + '</span>' : ''}</li>`).join('') + '</ul>';
+        const assets = '<h4>Assets / ingredients</h4><ul>' + pack.assets.map(a =>
+          `<li><b>${esc(a.name)}</b>: ${esc(a.prompt)}</li>`).join('') + '</ul>';
+        const cards = `<h4>Animation cards — ${batched ? 'full batch' : 'pilot slide ' + pack.pilot_slide + ' only'}</h4>` +
+          pack.cards.map(c => `<pre>${esc(cardText(c))}</pre>`).join('');
+        const assembly = '<h4>Assembly checklist</h4><ol>' + pack.assembly_checklist.map(s => `<li>${esc(s)}</li>`).join('') + '</ol>';
+        const files = '<p>' + Object.entries(downloads || {}).map(([k, v]) => `<a href="${v}">${k}.md</a>`).join(' · ') + '</p>';
+        const pilotBtns = batched ? '' : `<button type="button" id="flow-approve-pilot" class="run-btn">Approve pilot — batch the rest</button><p id="flow-batch-msg" class="dim"></p>`;
+        document.getElementById('flow-zone').innerHTML = board + assets + cards + assembly + files + pilotBtns;
+        const ap = document.getElementById('flow-approve-pilot');
+        if (ap) ap.addEventListener('click', async () => {
+          await fetch(`/api/bundles/${window._bundleId}/flow-pack/approve-pilot`, {method: 'POST'});
+          const r = await fetch(`/api/bundles/${window._bundleId}/flow-pack/batch`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+          const d = await r.json();
+          if (!r.ok) { document.getElementById('flow-batch-msg').textContent = d.error; return; }
+          document.getElementById('flow-msg').textContent = d.note;
+          renderFlow(d.flow_pack, d.downloads, true);
+        });
+      };
+      const flowBtn = document.getElementById('flow-btn');
+      if (flowBtn) {
+        flowBtn.addEventListener('click', async () => {
+          const msg = document.getElementById('flow-msg');
+          const choices = {
+            scope: document.getElementById('flow-scope').value,
+            clip_seconds: Number(document.getElementById('flow-clip').value),
+            aspect: document.getElementById('flow-aspect').value,
+            cutaways: document.getElementById('flow-cutaways').checked
+          };
+          const r = await fetch(`/api/bundles/${window._bundleId}/flow-pack`, {method: 'POST',
+            headers: {'Content-Type': 'application/json'}, body: JSON.stringify(choices)});
+          const d = await r.json();
+          if (!r.ok) { msg.textContent = d.error; return; }
+          msg.textContent = d.note;
+          renderFlow(d.flow_pack, d.downloads, false);
+        });
+      }
+    }
   } catch (err) {
     log.innerHTML = `<li class="error">Run failed: ${err}</li>`;
   }
