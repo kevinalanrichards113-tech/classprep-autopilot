@@ -16,6 +16,28 @@ repo is new work from the hackathon window.**
 about a minute while the instance wakes. Verified end to end on
 Nov 1, 2026: full demo run, review gate, Canvas + Kahoot exports.)
 
+## Hackathon disclosure
+
+**Built during the hackathon (Oct 28 – Nov 4, 2026):** the ClassPrep Autopilot web app and its eight-stage pipeline; the Verifier stage; the human review/approval gate; the Canvas and Kahoot Platform Agents and their export formats; the public deployment.
+
+**Pre-existing, NOT part of the entry:** the instructor's own class-prep workflow and teaching specifications (slide-design rules, quiz-settings presets, course materials and syllabi) predate the hackathon. They are the know-how the pipeline implements — the code that implements them was written during the hackathon. Demo inputs are the instructor's own course materials; assigned readings appear as titles and the instructor's own summaries only. No student data is used anywhere in the app, repo, or demo video.
+
+## Hackathon disclosure
+
+**Built during the hackathon (Oct 28 – Nov 4, 2026):** the ClassPrep
+Autopilot web app and its eight-stage pipeline; the Verifier stage; the
+human review/approval gate; the Canvas and Kahoot Platform Agents and
+their export formats; the public deployment.
+
+**Pre-existing, NOT part of the entry:** the instructor's own class-prep
+workflow and teaching specifications (slide-design rules, quiz-settings
+presets, course materials and syllabi) predate the hackathon. They are
+the know-how the pipeline implements — the code that implements them was
+written during the hackathon. Demo inputs are the instructor's own course
+materials; assigned readings appear as titles and the instructor's own
+summaries only. No student data is used anywhere in the app, repo, or
+demo video.
+
 ## Pipeline
 
 1. **Planner** — reads the session, outcomes, and instructor's chosen outputs
